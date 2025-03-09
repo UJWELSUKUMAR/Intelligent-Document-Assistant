@@ -1,0 +1,188 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Document Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .drag-area {
+            border: 2px dashed #cbd5e1;
+            background: #f8fafc;
+            transition: all 0.3s ease;
+        }
+        .drag-area.active {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
+    <div class="max-w-3xl w-full mx-auto">
+        <h1 class="text-4xl font-bold mb-6 text-center text-blue-600">📄 Intelligent Document Assistant</h1>
+        
+        <!-- Upload Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Upload Your PDF</h2>
+            <form id="uploadForm" class="space-y-4">
+                <div class="drag-area cursor-pointer p-8 rounded-lg text-center" id="dragArea">
+                    <div class="space-y-2">
+                        <i class="fas fa-cloud-upload-alt text-5xl text-blue-500"></i>
+                        <p class="text-lg text-gray-600">Drag & Drop your PDF here or</p>
+                        <input type="file" id="pdfFile" accept=".pdf" class="hidden">
+                        <button type="button" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" 
+                                onclick="document.getElementById('pdfFile').click()">
+                            Browse File
+                        </button>
+                    </div>
+                    <p id="selectedFileName" class="mt-2 text-sm text-gray-600"></p>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center justify-center">
+                    Upload and Initialize <span id="uploadSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </form>
+            <div id="uploadStatus" class="mt-4 text-sm text-center"></div>
+        </div>
+        
+        <!-- Question Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Ask Questions</h2>
+            <form id="questionForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Your Question:</label>
+                    <textarea id="question" class="w-full p-3 border rounded-lg focus:ring focus:ring-blue-300" rows="3" required></textarea>
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center justify-center">
+                    Ask Question <span id="questionSpinner" class="loading-spinner hidden"></span>
+                </button>
+            </form>
+            <div id="answer" class="mt-4 p-4 bg-gray-50 rounded-lg hidden">
+                <h3 class="font-semibold mb-2 text-gray-800">Answer:</h3>
+                <p id="answerText" class="text-gray-700"></p>
+                <p id="processingTime" class="text-sm text-gray-500 mt-2"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dragArea = document.getElementById('dragArea');
+        const fileInput = document.getElementById('pdfFile');
+        const fileNameDisplay = document.getElementById('selectedFileName');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dragArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dragArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        dragArea.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles);
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight() {
+            dragArea.classList.add('active');
+        }
+
+        function unhighlight() {
+            dragArea.classList.remove('active');
+        }
+
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            handleFiles({ target: { files: files } });
+        }
+
+        function handleFiles(e) {
+            const file = e.target.files[0];
+            if (file) {
+                fileNameDisplay.textContent = `Selected file: ${file.name}`;
+                fileInput.files = e.target.files;
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const statusDiv = document.getElementById('uploadStatus');
+            const spinner = document.getElementById('uploadSpinner');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            statusDiv.textContent = 'Uploading and initializing...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusDiv.textContent = 'System initialized successfully!';
+                    statusDiv.className = 'mt-4 text-sm text-green-600';
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+                statusDiv.className = 'mt-4 text-sm text-red-600';
+            } finally {
+                spinner.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('questionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const answerDiv = document.getElementById('answer');
+            const answerText = document.getElementById('answerText');
+            const processingTime = document.getElementById('processingTime');
+            const spinner = document.getElementById('questionSpinner');
+            const question = document.getElementById('question').value;
+            
+            answerText.textContent = 'Processing...';
+            answerDiv.classList.remove('hidden');
+            spinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await response.json();
+                
+                answerText.textContent = data.answer;
+                processingTime.textContent = `Processing time: ${data.processing_time.toFixed(2)} seconds`;
+            } catch (error) {
+                answerText.textContent = `Error: ${error.message}`;
+                processingTime.textContent = '';
+            } finally {
+                spinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
